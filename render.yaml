@@ -26,6 +26,14 @@ services:
         sync: false   # set in dashboard
       - key: FLASK_ENV
         value: production
+      # Optional but recommended: permanent image hosting (free tier)
+      # https://cloudinary.com → Dashboard → copy Cloud name / API key / secret
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false   # set in dashboard (optional)
+      - key: CLOUDINARY_API_KEY
+        sync: false   # set in dashboard (optional)
+      - key: CLOUDINARY_API_SECRET
+        sync: false   # set in dashboard (optional)
     # Paid plan only — uncomment to persist uploaded images across deploys:
     # disk:
     #   name: uploads

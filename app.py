@@ -33,6 +33,48 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
 
+# ─── Cloudinary (optional: permanent image hosting) ─────────────────────
+# Set these 3 env vars and admin uploads go to Cloudinary's CDN instead of
+# the local disk, so images survive Render deploys/restarts. When not
+# configured, falls back to local disk storage.
+CLOUDINARY_CLOUD = os.getenv('CLOUDINARY_CLOUD_NAME', '').strip()
+CLOUDINARY_KEY = os.getenv('CLOUDINARY_API_KEY', '').strip()
+CLOUDINARY_SECRET = os.getenv('CLOUDINARY_API_SECRET', '').strip()
+CLOUDINARY_FOLDER = 'vyracouture'
+
+
+def upload_to_cloudinary(filename, mimetype, content):
+    """Upload image bytes to Cloudinary. Returns secure URL or None."""
+    if not (CLOUDINARY_CLOUD and CLOUDINARY_KEY and CLOUDINARY_SECRET):
+        return None
+    try:
+        import requests
+    except ImportError:
+        print('[cloudinary] requests not installed; using local disk')
+        return None
+    try:
+        timestamp = str(int(datetime.now(timezone.utc).timestamp()))
+        # Cloudinary signature: sorted params joined, secret appended, sha1
+        to_sign = f'folder={CLOUDINARY_FOLDER}&timestamp={timestamp}{CLOUDINARY_SECRET}'
+        signature = hashlib.sha1(to_sign.encode('utf-8')).hexdigest()
+        resp = requests.post(
+            f'https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD}/image/upload',
+            data={
+                'api_key': CLOUDINARY_KEY,
+                'timestamp': timestamp,
+                'folder': CLOUDINARY_FOLDER,
+                'signature': signature,
+            },
+            files={'file': (filename, content, mimetype)},
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            return resp.json().get('secure_url')
+        print(f'[cloudinary] upload failed ({resp.status_code}): {resp.text[:300]}')
+    except Exception as e:
+        print(f'[cloudinary] upload error: {e}')
+    return None
+
 import werkzeug.utils
 
 def allowed_file(filename):
@@ -581,15 +623,25 @@ def upload_image():
     if file.filename == '':
         return jsonify({'error': 'No file selected'}), 400
 
-    if file and allowed_file(file.filename):
-        ext = file.filename.rsplit('.', 1)[1].lower()
-        filename = f"{secrets.token_hex(8)}.{ext}"
-        filepath = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(filepath)
-        url = url_for('static', filename=f'uploads/{filename}')
-        return jsonify({'success': True, 'url': url, 'filename': filename})
+    if not (file and allowed_file(file.filename)):
+        return jsonify({'error': 'File type not allowed. Use PNG, JPG, GIF, WebP, or SVG.'}), 400
 
-    return jsonify({'error': 'File type not allowed. Use PNG, JPG, GIF, WebP, or SVG.'}), 400
+    content = file.read()
+
+    # Try Cloudinary first (permanent URL that survives deploys)
+    url = upload_to_cloudinary(file.filename, file.mimetype, content)
+    if url:
+        return jsonify({'success': True, 'url': url,
+                        'filename': url.rsplit('/', 1)[-1], 'storage': 'cloudinary'})
+
+    # Fallback: local disk (ephemeral on Render free plan)
+    ext = file.filename.rsplit('.', 1)[1].lower()
+    filename = f"{secrets.token_hex(8)}.{ext}"
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    with open(filepath, 'wb') as fh:
+        fh.write(content)
+    url = url_for('static', filename=f'uploads/{filename}')
+    return jsonify({'success': True, 'url': url, 'filename': filename, 'storage': 'local'})
 
 
 @app.route('/api/upload/multiple', methods=['POST'])
@@ -601,11 +653,16 @@ def upload_multiple():
     urls = []
     for file in files:
         if file and file.filename and allowed_file(file.filename):
-            ext = file.filename.rsplit('.', 1)[1].lower()
-            filename = f"{secrets.token_hex(8)}.{ext}"
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
-            file.save(filepath)
-            urls.append(url_for('static', filename=f'uploads/{filename}'))
+            content = file.read()
+            url = upload_to_cloudinary(file.filename, file.mimetype, content)
+            if not url:
+                ext = file.filename.rsplit('.', 1)[1].lower()
+                filename = f"{secrets.token_hex(8)}.{ext}"
+                filepath = os.path.join(UPLOAD_FOLDER, filename)
+                with open(filepath, 'wb') as fh:
+                    fh.write(content)
+                url = url_for('static', filename=f'uploads/{filename}')
+            urls.append(url)
 
     return jsonify({'success': True, 'urls': urls, 'count': len(urls)})
 
