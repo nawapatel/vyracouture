@@ -4,6 +4,8 @@ Flask + MongoDB backend
 """
 
 import os
+import io
+import base64
 import secrets
 import hashlib
 from datetime import datetime, timezone, timedelta
@@ -33,47 +35,51 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
 
-# ─── Cloudinary (optional: permanent image hosting) ─────────────────────
-# Set these 3 env vars and admin uploads go to Cloudinary's CDN instead of
-# the local disk, so images survive Render deploys/restarts. When not
-# configured, falls back to local disk storage.
-CLOUDINARY_CLOUD = os.getenv('CLOUDINARY_CLOUD_NAME', '').strip()
-CLOUDINARY_KEY = os.getenv('CLOUDINARY_API_KEY', '').strip()
-CLOUDINARY_SECRET = os.getenv('CLOUDINARY_API_SECRET', '').strip()
-CLOUDINARY_FOLDER = 'vyracouture'
+# ─── Image storage: base64 inside MongoDB ─────────────────────────────────
+# Uploaded images are compressed and stored as base64 data URLs directly in
+# the product document (products collection) — they live in the DB and
+# survive deploys. Externally-hosted images are stored as plain URLs.
+
+MAX_IMAGE_DATAURL_CHARS = 4_000_000   # ~3MB raw → keeps docs under Mongo's 16MB limit
+IMG_MAX_SIDE = 900                    # resize long edge (cards render far smaller)
+IMG_JPEG_QUALITY = 80
 
 
-def upload_to_cloudinary(filename, mimetype, content):
-    """Upload image bytes to Cloudinary. Returns secure URL or None."""
-    if not (CLOUDINARY_CLOUD and CLOUDINARY_KEY and CLOUDINARY_SECRET):
+def encode_image_for_db(filename, mimetype, content):
+    """Compress an upload and return a base64 data URL, or None if too big."""
+    from PIL import Image, ImageOps
+
+    ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+
+    # SVG: store raw (small text; Pillow can't rasterize it)
+    if ext == 'svg':
+        encoded = base64.b64encode(content).decode('ascii')
+        return f'data:image/svg+xml;base64,{encoded}' if len(encoded) <= MAX_IMAGE_DATAURL_CHARS else None
+
+    img = Image.open(io.BytesIO(content))
+
+    # Animated GIF: keep original bytes (small) to preserve the animation
+    if getattr(img, 'is_animated', False) and len(content) <= 1_000_000:
+        encoded = base64.b64encode(content).decode('ascii')
+        return f'data:image/gif;base64,{encoded}' if len(encoded) <= MAX_IMAGE_DATAURL_CHARS else None
+
+    img = ImageOps.exif_transpose(img)  # fix phone-camera rotation
+    if max(img.size) > IMG_MAX_SIDE:
+        img.thumbnail((IMG_MAX_SIDE, IMG_MAX_SIDE), Image.LANCZOS)
+
+    buf = io.BytesIO()
+    has_alpha = img.mode in ('RGBA', 'LA', 'PA') or (img.mode == 'P' and 'transparency' in img.info)
+    if has_alpha:
+        img.save(buf, format='PNG', optimize=True)
+        mime = 'image/png'
+    else:
+        img.convert('RGB').save(buf, format='JPEG', quality=IMG_JPEG_QUALITY, optimize=True)
+        mime = 'image/jpeg'
+
+    encoded = base64.b64encode(buf.getvalue()).decode('ascii')
+    if len(encoded) > MAX_IMAGE_DATAURL_CHARS:
         return None
-    try:
-        import requests
-    except ImportError:
-        print('[cloudinary] requests not installed; using local disk')
-        return None
-    try:
-        timestamp = str(int(datetime.now(timezone.utc).timestamp()))
-        # Cloudinary signature: sorted params joined, secret appended, sha1
-        to_sign = f'folder={CLOUDINARY_FOLDER}&timestamp={timestamp}{CLOUDINARY_SECRET}'
-        signature = hashlib.sha1(to_sign.encode('utf-8')).hexdigest()
-        resp = requests.post(
-            f'https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD}/image/upload',
-            data={
-                'api_key': CLOUDINARY_KEY,
-                'timestamp': timestamp,
-                'folder': CLOUDINARY_FOLDER,
-                'signature': signature,
-            },
-            files={'file': (filename, content, mimetype)},
-            timeout=30,
-        )
-        if resp.status_code == 200:
-            return resp.json().get('secure_url')
-        print(f'[cloudinary] upload failed ({resp.status_code}): {resp.text[:300]}')
-    except Exception as e:
-        print(f'[cloudinary] upload error: {e}')
-    return None
+    return f'data:{mime};base64,{encoded}'
 
 import werkzeug.utils
 
@@ -534,6 +540,12 @@ def checkout():
     items = cart['items']
     total = sum(i.get('price', 0) * i.get('quantity', 1) for i in items)
 
+    # Order views don't render images — strip base64 blobs to keep order docs small
+    order_items = [
+        {k: v for k, v in i.items() if not (k == 'image' and str(v).startswith('data:'))}
+        for i in items
+    ]
+
     order = {
         'user_id': session.get('user_id'),
         'user_name': session.get('user_name', ''),
@@ -543,7 +555,7 @@ def checkout():
         'city': data.get('city', ''),
         'state': data.get('state', ''),
         'pincode': data.get('pincode', ''),
-        'items': items,
+        'items': order_items,
         'subtotal': total,
         'shipping': 0 if total >= 999 else 99,
         'total': total + (0 if total >= 999 else 99),
@@ -628,20 +640,11 @@ def upload_image():
 
     content = file.read()
 
-    # Try Cloudinary first (permanent URL that survives deploys)
-    url = upload_to_cloudinary(file.filename, file.mimetype, content)
-    if url:
-        return jsonify({'success': True, 'url': url,
-                        'filename': url.rsplit('/', 1)[-1], 'storage': 'cloudinary'})
-
-    # Fallback: local disk (ephemeral on Render free plan)
-    ext = file.filename.rsplit('.', 1)[1].lower()
-    filename = f"{secrets.token_hex(8)}.{ext}"
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
-    with open(filepath, 'wb') as fh:
-        fh.write(content)
-    url = url_for('static', filename=f'uploads/{filename}')
-    return jsonify({'success': True, 'url': url, 'filename': filename, 'storage': 'local'})
+    # Compress + store as base64 data URL inside MongoDB (survives deploys)
+    url = encode_image_for_db(file.filename, file.mimetype, content)
+    if not url:
+        return jsonify({'error': 'Image too large or unreadable. Use JPG/PNG under 3MB.'}), 400
+    return jsonify({'success': True, 'url': url, 'filename': file.filename, 'storage': 'db'})
 
 
 @app.route('/api/upload/multiple', methods=['POST'])
@@ -654,15 +657,9 @@ def upload_multiple():
     for file in files:
         if file and file.filename and allowed_file(file.filename):
             content = file.read()
-            url = upload_to_cloudinary(file.filename, file.mimetype, content)
-            if not url:
-                ext = file.filename.rsplit('.', 1)[1].lower()
-                filename = f"{secrets.token_hex(8)}.{ext}"
-                filepath = os.path.join(UPLOAD_FOLDER, filename)
-                with open(filepath, 'wb') as fh:
-                    fh.write(content)
-                url = url_for('static', filename=f'uploads/{filename}')
-            urls.append(url)
+            url = encode_image_for_db(file.filename, file.mimetype, content)
+            if url:
+                urls.append(url)
 
     return jsonify({'success': True, 'urls': urls, 'count': len(urls)})
 
