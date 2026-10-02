@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Track Order - {{ store_name }}{% endblock %}
+{% block content %}
+<section class="track-page">
+    <div class="container" style="max-width:600px">
+        <h1>Track Your Order</h1>
+        <div class="track-form">
+            <div class="form-group">
+                <label>Order ID</label>
+                <input type="text" id="trackOrderId" placeholder="e.g. HB20260911ABC123">
+            </div>
+            <div class="form-group">
+                <label>Phone Number</label>
+                <input type="tel" id="trackPhone" placeholder="Enter the phone used during order">
+            </div>
+            <button class="btn btn-primary btn-block" onclick="trackOrder()">Track Order</button>
+        </div>
+        <div id="trackResult" style="margin-top:2rem"></div>
+    </div>
+</section>
+
+<script>
+// Prefill order ID when arriving from the confirmation page
+(function() {
+    const oid = new URLSearchParams(window.location.search).get('order_id');
+    if (oid) document.getElementById('trackOrderId').value = oid;
+})();
+
+async function trackOrder() {
+    const orderId = document.getElementById('trackOrderId').value.trim();
+    const phone = document.getElementById('trackPhone').value.trim();
+    if (!orderId || !phone) return showToast('Please enter both fields', 'error');
+
+    const res = await fetch(`/api/track-order?order_id=${orderId}&phone=${phone}`);
+    const container = document.getElementById('trackResult');
+    if (!res.ok) {
+        container.innerHTML = '<div class="empty-state"><p>Order not found. Please check your Order ID and phone number.</p></div>';
+        return;
+    }
+    const order = await res.json();
+    container.innerHTML = `
+    <div class="order-tracked">
+        <h3>Order ${order.order_id}</h3>
+        <span class="badge badge-${order.status}">${order.status}</span>
+        <div class="order-items">${order.items.map(i => `<p>${i.name} × ${i.quantity} — ₹${(i.price*i.quantity).toLocaleString('en-IN')}</p>`).join('')}</div>
+        <p><strong>Total:</strong> ₹${order.total.toLocaleString('en-IN')}</p>
+        <p><strong>Address:</strong> ${order.address}</p>
+        <p><strong>Ordered on:</strong> ${new Date(order.created_at).toLocaleDateString('en-IN')}</p>
+    </div>`;
+}
+</script>
+{% endblock %}

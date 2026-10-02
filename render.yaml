@@ -1,0 +1,33 @@
+# Render Blueprint — VYRA COUTURE fashion store
+# https://render.com/docs/blueprint-spec
+#
+# NOTE: On the free plan the disk is ephemeral — images uploaded via the
+# admin panel are kept only until the next deploy/restart. If that matters,
+# upgrade to paid + enable the disk below, or switch to Cloudinary/S3.
+services:
+  - type: web
+    name: vyracouture
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 60
+    envVars:
+      - key: MONGODB_URI
+        sync: false   # paste your Atlas URI in the Render dashboard
+      - key: SECRET_KEY
+        generateValue: true
+      - key: STORE_NAME
+        value: VYRA COUTURE
+      - key: STORE_TAGLINE
+        value: All your needs in one place
+      - key: ADMIN_USERNAME
+        sync: false   # set in dashboard
+      - key: ADMIN_PASSWORD
+        sync: false   # set in dashboard
+      - key: FLASK_ENV
+        value: production
+    # Paid plan only — uncomment to persist uploaded images across deploys:
+    # disk:
+    #   name: uploads
+    #   mountPath: /opt/render/project/src/static/uploads
+    #   sizeGB: 1

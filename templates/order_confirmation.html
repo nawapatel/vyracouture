@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Order Confirmed - {{ store_name }}{% endblock %}
+{% block content %}
+<section class="track-page">
+    <div class="container" style="max-width:640px;text-align:center">
+        <div class="empty-state" style="padding:3rem 2rem">
+            <i class="fas fa-check-circle" style="font-size:3rem;color:#2e7d32"></i>
+            <h1 style="margin-top:1rem">Thank you for your order!</h1>
+            <p>Your order <strong>{{ order.order_id }}</strong> has been placed successfully.</p>
+            <span class="badge badge-{{ order.status }}" style="margin-top:.5rem;display:inline-block">{{ order.status }}</span>
+
+            <div style="text-align:left;margin-top:2rem;background:#fafafa;border-radius:10px;padding:1.25rem">
+                <h4 style="margin-bottom:.75rem">Order Summary</h4>
+                {% for item in order['items'] %}
+                <div style="display:flex;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid #eee">
+                    <span>{{ item.name }}{% if item.size %} ({{ item.size }}){% endif %} × {{ item.quantity }}</span>
+                    <span>₹{{ '%0.0f'|format(item.price * item.quantity) }}</span>
+                </div>
+                {% endfor %}
+                <div style="display:flex;justify-content:space-between;padding:.4rem 0">
+                    <span>Shipping</span>
+                    <span>{% if order.shipping == 0 %}FREE{% else %}₹{{ order.shipping }}{% endif %}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:.6rem 0 0;font-weight:700">
+                    <span>Total</span>
+                    <span>₹{{ '%0.0f'|format(order.total) }}</span>
+                </div>
+            </div>
+
+            <div style="text-align:left;margin-top:1.25rem;background:#fafafa;border-radius:10px;padding:1.25rem">
+                <h4 style="margin-bottom:.5rem">Delivery Details</h4>
+                <p style="margin:.25rem 0"><strong>Name:</strong> {{ order.user_name }}</p>
+                <p style="margin:.25rem 0"><strong>Phone:</strong> {{ order.phone }}</p>
+                <p style="margin:.25rem 0"><strong>Address:</strong> {{ order.address }}, {{ order.city }}, {{ order.state }} - {{ order.pincode }}</p>
+                <p style="margin:.25rem 0"><strong>Payment:</strong> {{ order.payment_method|upper }}</p>
+                <p style="margin:.25rem 0"><strong>Ordered on:</strong> {{ order.created_at.strftime('%d %b %Y, %I:%M %p') if order.created_at else '' }}</p>
+            </div>
+
+            <div style="display:flex;gap:1rem;justify-content:center;margin-top:2rem;flex-wrap:wrap">
+                <a href="/track-order?order_id={{ order.order_id }}" class="btn btn-primary">Track Order</a>
+                <a href="/shop" class="btn btn-outline">Continue Shopping</a>
+                <a href="/account" class="btn btn-outline">My Orders</a>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

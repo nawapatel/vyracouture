@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ store_name }}{% endblock %}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Announcement Bar -->
+    <div class="announcement-bar">
+        <p>Up to 50% off! Sale is live 🎉 &nbsp;&nbsp;|&nbsp;&nbsp; FREE Shipping Across India! &nbsp;&nbsp;|&nbsp;&nbsp; FREE Size Exchanges!</p>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="container header-inner">
+            <button class="mobile-menu-btn" onclick="toggleMobileMenu()">
+                <i class="fas fa-bars"></i>
+            </button>
+
+            <a href="/" class="logo">
+                <span class="logo-text">{{ store_name }}</span>
+            </a>
+
+            <nav class="main-nav" id="mainNav">
+                <a href="/shop">New Arrivals</a>
+                {% for col in collections if collections is defined %}
+                <a href="/shop/{{ col.slug }}">{{ col.name }}</a>
+                {% endfor %}
+                <a href="/shop?sort=popular">Best Sellers</a>
+                <a href="/shop?sort=price_low">Sale</a>
+            </nav>
+
+            <div class="header-actions">
+                <button class="icon-btn" onclick="window.location.href='/account'" title="Account">
+                    <i class="fas fa-user"></i>
+                </button>
+                <button class="icon-btn cart-btn" onclick="window.location.href='/cart'" title="Cart">
+                    <i class="fas fa-shopping-bag"></i>
+                    <span class="cart-count" id="cartCount" style="display:none">0</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Mobile Nav -->
+    <div class="mobile-nav" id="mobileNav">
+        <div class="mobile-nav-header">
+            <span class="logo-text">{{ store_name }}</span>
+            <button onclick="toggleMobileMenu()"><i class="fas fa-times"></i></button>
+        </div>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/shop">Shop All</a>
+            {% for col in collections if collections is defined %}
+            <a href="/shop/{{ col.slug }}">{{ col.name }}</a>
+            {% endfor %}
+            <a href="/shop?sort=popular">Best Sellers</a>
+            <a href="/shop?sort=price_low">Sale</a>
+            <hr>
+            <a href="/account">My Account</a>
+            <a href="/track-order">Track Order</a>
+        </nav>
+    </div>
+    <div class="mobile-nav-overlay" id="mobileNavOverlay" onclick="toggleMobileMenu()"></div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Main Content -->
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-col">
+                    <h3>{{ store_name }}</h3>
+                    <p>Shop the trendiest styles with breathable fabrics, hand embroidery, and timeless designs.</p>
+                    <div class="social-links">
+                        <a href="#"><i class="fab fa-instagram"></i></a>
+                        <a href="#"><i class="fab fa-facebook"></i></a>
+                        <a href="#"><i class="fab fa-pinterest"></i></a>
+                        <a href="#"><i class="fab fa-whatsapp"></i></a>
+                    </div>
+                </div>
+                <div class="footer-col">
+                    <h4>Quick Links</h4>
+                    <a href="/shop">Shop All</a>
+                    <a href="/shop?sort=price_low">Sale</a>
+                    <a href="/track-order">Track Order</a>
+                    <a href="/account">My Account</a>
+                </div>
+                <div class="footer-col">
+                    <h4>Help</h4>
+                    <a href="#">Shipping Policy</a>
+                    <a href="#">Return & Exchange</a>
+                    <a href="#">Size Guide</a>
+                    <a href="#">Contact Us</a>
+                </div>
+                <div class="footer-col">
+                    <h4>Contact</h4>
+                    <p><i class="fas fa-envelope"></i> support@fashionstore.com</p>
+                    <p><i class="fas fa-phone"></i> +91 9876543210</p>
+                    <p><i class="fas fa-clock"></i> Mon-Sat 11am-5pm</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <div class="trust-badges">
+                    <span><i class="fas fa-truck"></i> Free Shipping</span>
+                    <span><i class="fas fa-exchange-alt"></i> Free Exchanges</span>
+                    <span><i class="fas fa-lock"></i> Secure Payment</span>
+                    <span><i class="fas fa-headset"></i> Customer Support</span>
+                </div>
+                <p>&copy; 2026 {{ store_name }}. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

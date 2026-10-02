@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}{{ store_name }} - Trendiest Styles{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="hero">
+    <div class="hero-content">
+        <h1>Treat Yourself to the<br>Trendiest Styles</h1>
+        <p>Up to 50% off! Fresh collection of handcrafted linen & embroidered dresses</p>
+        <a href="/shop" class="btn btn-primary btn-lg">Shop Now</a>
+    </div>
+</section>
+
+<!-- Category Quick Links -->
+<section class="category-bar">
+    <div class="container">
+        <div class="category-scroll">
+            {% for col in collections if collections is defined %}
+            <a href="/shop/{{ col.slug }}" class="category-pill">{{ col.name }}</a>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<!-- New Arrivals -->
+{% if new_arrivals %}
+<section class="product-section">
+    <div class="container">
+        <div class="section-header">
+            <h2>New Arrivals</h2>
+            <a href="/shop?sort=newest" class="view-all">Explore All →</a>
+        </div>
+        <div class="product-grid">
+            {% for product in new_arrivals %}
+            <div class="product-card" onclick="window.location.href='/product/{{ product._id }}'">
+                <div class="product-image-wrap">
+                    {% if product.images and product.images|length > 0 %}
+                    <img src="{{ product.images[0] }}" alt="{{ product.name }}" loading="lazy">
+                    {% else %}
+                    <div class="product-placeholder"><i class="fas fa-image"></i></div>
+                    {% endif %}
+                    {% if product.is_new %}<span class="badge badge-new">New</span>{% endif %}
+                    {% if product.is_sale %}<span class="badge badge-sale">Sale</span>{% endif %}
+                    <button class="quick-add" onclick="event.stopPropagation(); quickAdd('{{ product._id }}')">Quick Add</button>
+                </div>
+                <div class="product-info">
+                    <h3 class="product-name">{{ product.name }}</h3>
+                    <div class="product-price">
+                        <span class="sale-price">₹{{ "{:,.0f}".format(product.sale_price) }}</span>
+                        {% if product.original_price > product.sale_price %}
+                        <span class="original-price">₹{{ "{:,.0f}".format(product.original_price) }}</span>
+                        <span class="discount">-{{ ((1 - product.sale_price / product.original_price) * 100)|int }}%</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<!-- Featured / Best Sellers -->
+{% if featured %}
+<section class="product-section alt-bg">
+    <div class="container">
+        <div class="section-header">
+            <h2>Best Sellers</h2>
+            <a href="/shop?sort=popular" class="view-all">Explore All →</a>
+        </div>
+        <div class="product-grid">
+            {% for product in featured %}
+            <div class="product-card" onclick="window.location.href='/product/{{ product._id }}'">
+                <div class="product-image-wrap">
+                    {% if product.images and product.images|length > 0 %}
+                    <img src="{{ product.images[0] }}" alt="{{ product.name }}" loading="lazy">
+                    {% else %}
+                    <div class="product-placeholder"><i class="fas fa-image"></i></div>
+                    {% endif %}
+                    {% if product.is_sale %}<span class="badge badge-sale">{{ ((1 - product.sale_price / product.original_price) * 100)|int }}% OFF</span>{% endif %}
+                    <button class="quick-add" onclick="event.stopPropagation(); quickAdd('{{ product._id }}')">Quick Add</button>
+                </div>
+                <div class="product-info">
+                    <h3 class="product-name">{{ product.name }}</h3>
+                    <div class="product-price">
+                        <span class="sale-price">₹{{ "{:,.0f}".format(product.sale_price) }}</span>
+                        {% if product.original_price > product.sale_price %}
+                        <span class="original-price">₹{{ "{:,.0f}".format(product.original_price) }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<!-- Sale Products -->
+{% if sale_products %}
+<section class="product-section">
+    <div class="container">
+        <div class="section-header">
+            <h2>Sale <span class="sale-tag">Up to 50% Off</span></h2>
+            <a href="/shop?sort=price_low" class="view-all">Explore All →</a>
+        </div>
+        <div class="product-grid">
+            {% for product in sale_products %}
+            <div class="product-card" onclick="window.location.href='/product/{{ product._id }}'">
+                <div class="product-image-wrap">
+                    {% if product.images and product.images|length > 0 %}
+                    <img src="{{ product.images[0] }}" alt="{{ product.name }}" loading="lazy">
+                    {% else %}
+                    <div class="product-placeholder"><i class="fas fa-image"></i></div>
+                    {% endif %}
+                    <span class="badge badge-sale">{{ ((1 - product.sale_price / product.original_price) * 100)|int }}% OFF</span>
+                    <button class="quick-add" onclick="event.stopPropagation(); quickAdd('{{ product._id }}')">Quick Add</button>
+                </div>
+                <div class="product-info">
+                    <h3 class="product-name">{{ product.name }}</h3>
+                    <div class="product-price">
+                        <span class="sale-price">₹{{ "{:,.0f}".format(product.sale_price) }}</span>
+                        {% if product.original_price > product.sale_price %}
+                        <span class="original-price">₹{{ "{:,.0f}".format(product.original_price) }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<!-- Collection Sections -->
+{% for slug, data in collection_products.items() %}
+<section class="product-section {% if loop.index % 2 == 0 %}alt-bg{% endif %}">
+    <div class="container">
+        <div class="section-header">
+            <h2>{{ data.name }}</h2>
+            <a href="/shop/{{ slug }}" class="view-all">Explore All →</a>
+        </div>
+        <div class="product-grid">
+            {% for product in data.products %}
+            <div class="product-card" onclick="window.location.href='/product/{{ product._id }}'">
+                <div class="product-image-wrap">
+                    {% if product.images and product.images|length > 0 %}
+                    <img src="{{ product.images[0] }}" alt="{{ product.name }}" loading="lazy">
+                    {% else %}
+                    <div class="product-placeholder"><i class="fas fa-image"></i></div>
+                    {% endif %}
+                    {% if product.is_sale %}<span class="badge badge-sale">{{ ((1 - product.sale_price / product.original_price) * 100)|int }}% OFF</span>{% endif %}
+                    <button class="quick-add" onclick="event.stopPropagation(); quickAdd('{{ product._id }}')">Quick Add</button>
+                </div>
+                <div class="product-info">
+                    <h3 class="product-name">{{ product.name }}</h3>
+                    <div class="product-price">
+                        <span class="sale-price">₹{{ "{:,.0f}".format(product.sale_price) }}</span>
+                        {% if product.original_price > product.sale_price %}
+                        <span class="original-price">₹{{ "{:,.0f}".format(product.original_price) }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endfor %}
+
+<!-- Testimonials -->
+<section class="testimonials">
+    <div class="container">
+        <h2 class="text-center">What Our Customers Say</h2>
+        <div class="testimonial-grid">
+            <div class="testimonial-card">
+                <div class="stars">★★★★★</div>
+                <p>"Absolutely love the linen quality! The dress fits perfectly and the fabric is so breathable."</p>
+                <span class="testimonial-author">— Priya, Mumbai</span>
+            </div>
+            <div class="testimonial-card">
+                <div class="stars">★★★★★</div>
+                <p>"The hand embroidery is stunning. Got so many compliments at the event!"</p>
+                <span class="testimonial-author">— Anjali, Bangalore</span>
+            </div>
+            <div class="testimonial-card">
+                <div class="stars">★★★★★</div>
+                <p>"Fast delivery, beautiful packaging, and the dress looks even better than the photos."</p>
+                <span class="testimonial-author">— Swathi, Kerala</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Trust Bar -->
+<section class="trust-bar">
+    <div class="container">
+        <div class="trust-grid">
+            <div class="trust-item">
+                <i class="fas fa-truck"></i>
+                <h4>Free Shipping</h4>
+                <p>Free delivery across India on orders above ₹999</p>
+            </div>
+            <div class="trust-item">
+                <i class="fas fa-exchange-alt"></i>
+                <h4>Free Exchanges</h4>
+                <p>Easy size exchanges within 7 days</p>
+            </div>
+            <div class="trust-item">
+                <i class="fas fa-lock"></i>
+                <h4>Secure Payment</h4>
+                <p>Your payment information is processed securely</p>
+            </div>
+            <div class="trust-item">
+                <i class="fas fa-headset"></i>
+                <h4>Customer Support</h4>
+                <p>We're available on call, email, WhatsApp & DM</p>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

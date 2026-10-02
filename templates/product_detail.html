@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}{{ product.name }} - {{ store_name }}{% endblock %}
+{% block content %}
+<section class="product-page">
+    <div class="container">
+        <nav class="breadcrumb">
+            <a href="/">Home</a> / <a href="/shop">Shop</a> /
+            {% if product.collection_slug %}
+            <a href="/shop/{{ product.collection_slug }}">{{ product.collection_slug|replace('-',' ')|title }}</a> /
+            {% endif %}
+            <span>{{ product.name }}</span>
+        </nav>
+
+        <div class="product-detail">
+            <!-- Images -->
+            <div class="product-images">
+                <div class="main-image">
+                    {% if product.images and product.images|length > 0 %}
+                    <img id="mainImage" src="{{ product.images[0] }}" alt="{{ product.name }}">
+                    {% else %}
+                    <div class="product-placeholder-lg"><i class="fas fa-image"></i></div>
+                    {% endif %}
+                </div>
+                {% if product.images and product.images|length > 1 %}
+                <div class="thumbnail-strip">
+                    {% for img in product.images %}
+                    <img class="thumbnail {% if loop.first %}active{% endif %}" src="{{ img }}" onclick="changeImage('{{ img }}', this)" alt="{{ product.name }}">
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Info -->
+            <div class="product-detail-info">
+                <h1>{{ product.name }}</h1>
+
+                <div class="detail-price">
+                    <span class="sale-price">₹{{ "{:,.0f}".format(product.sale_price) }}</span>
+                    {% if product.original_price > product.sale_price %}
+                    <span class="original-price">₹{{ "{:,.0f}".format(product.original_price) }}</span>
+                    <span class="discount">{{ ((1 - product.sale_price / product.original_price) * 100)|int }}% OFF</span>
+                    {% endif %}
+                </div>
+
+                {% if product.fabric %}
+                <p class="detail-fabric"><strong>Fabric:</strong> {{ product.fabric }}</p>
+                {% endif %}
+
+                <div class="detail-options">
+                    <!-- Sizes -->
+                    <div class="option-group">
+                        <label>Size</label>
+                        <div class="size-options">
+                            {% for size in product.sizes %}
+                            <button class="size-btn {% if loop.first %}selected{% endif %}" onclick="selectSize(this, '{{ size }}')">{{ size }}</button>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Colors -->
+                    {% if product.colors %}
+                    <div class="option-group">
+                        <label>Color</label>
+                        <div class="color-options">
+                            {% for color in product.colors %}
+                            <button class="color-btn {% if loop.first %}selected{% endif %}" style="background: {{ color }}" onclick="selectColor(this, '{{ color }}')"></button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Add to Cart -->
+                <div class="detail-actions">
+                    <div class="quantity-selector">
+                        <button onclick="changeQty(-1)">−</button>
+                        <input type="number" id="qty" value="1" min="1" max="10">
+                        <button onclick="changeQty(1)">+</button>
+                    </div>
+                    <button class="btn btn-primary btn-lg add-to-cart-btn" id="addToCartBtn" onclick="addToCartDetail()">
+                        <i class="fas fa-shopping-bag"></i> Add to Cart
+                    </button>
+                </div>
+
+                <!-- Accordion -->
+                <div class="detail-accordion">
+                    <details open>
+                        <summary>Description</summary>
+                        <p>{{ product.description or 'No description available.' }}</p>
+                    </details>
+                    {% if product.care_instructions %}
+                    <details>
+                        <summary>Care Instructions</summary>
+                        <p>{{ product.care_instructions }}</p>
+                    </details>
+                    {% endif %}
+                    <details>
+                        <summary>Shipping & Returns</summary>
+                        <p><strong>Shipping:</strong> Free on orders above ₹999. Delivery in 5-7 business days.</p>
+                        <p><strong>Returns:</strong> Easy exchanges within 7 days. Items must be unworn with tags attached.</p>
+                    </details>
+                </div>
+            </div>
+        </div>
+
+        <!-- Related Products -->
+        {% if related %}
+        <section class="related-products">
+            <h2>You May Also Like</h2>
+            <div class="product-grid">
+                {% for p in related %}
+                <div class="product-card" onclick="window.location.href='/product/{{ p._id }}'">
+                    <div class="product-image-wrap">
+                        {% if p.images and p.images|length > 0 %}
+                        <img src="{{ p.images[0] }}" alt="{{ p.name }}" loading="lazy">
+                        {% else %}
+                        <div class="product-placeholder"><i class="fas fa-image"></i></div>
+                        {% endif %}
+                    </div>
+                    <div class="product-info">
+                        <h3 class="product-name">{{ p.name }}</h3>
+                        <div class="product-price">
+                            <span class="sale-price">₹{{ "{:,.0f}".format(p.sale_price) }}</span>
+                            {% if p.original_price > p.sale_price %}
+                            <span class="original-price">₹{{ "{:,.0f}".format(p.original_price) }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+    </div>
+</section>
+
+<script>
+const productData = {
+    id: '{{ product._id }}',
+    name: '{{ product.name }}',
+    selectedSize: '{{ product.sizes[0] if product.sizes else "M" }}',
+    selectedColor: '{{ product.colors[0] if product.colors else "" }}'
+};
+
+function selectSize(el, size) {
+    document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('selected'));
+    el.classList.add('selected');
+    productData.selectedSize = size;
+}
+
+function selectColor(el, color) {
+    document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('selected'));
+    el.classList.add('selected');
+    productData.selectedColor = color;
+}
+
+function changeImage(src, thumb) {
+    document.getElementById('mainImage').src = src;
+    document.querySelectorAll('.thumbnail').forEach(t => t.classList.remove('active'));
+    thumb.classList.add('active');
+}
+
+function changeQty(delta) {
+    const input = document.getElementById('qty');
+    const val = Math.max(1, Math.min(10, parseInt(input.value) + delta));
+    input.value = val;
+}
+
+async function addToCartDetail() {
+    const qty = parseInt(document.getElementById('qty').value);
+    try {
+        const res = await fetch('/api/cart/add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                product_id: productData.id,
+                quantity: qty,
+                size: productData.selectedSize,
+                color: productData.selectedColor
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Added to cart!');
+            updateCartCount(data.count);
+        } else {
+            showToast(data.error || 'Failed to add', 'error');
+        }
+    } catch(e) {
+        showToast('Error adding to cart', 'error');
+    }
+}
+</script>
+{% endblock %}

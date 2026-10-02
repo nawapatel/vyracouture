@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Account - {{ store_name }}{% endblock %}
+{% block content %}
+<section class="account-page">
+    <div class="container">
+        <div id="accountContent">
+            <div class="empty-state" id="loginView">
+                <i class="fas fa-user"></i>
+                <h3 id="authTitle">Welcome!</h3>
+                <p id="authSubtitle">Login to track your orders and manage your account</p>
+                <div class="login-form" style="max-width:360px;margin:0 auto">
+                    <div class="form-group" id="nameGroup" style="display:none">
+                        <label>Full Name</label>
+                        <input type="text" id="regName" placeholder="Enter your name" style="width:100%">
+                    </div>
+                    <div class="form-group">
+                        <label>Phone Number</label>
+                        <input type="tel" id="loginPhone" placeholder="Enter your phone number" style="width:100%">
+                    </div>
+                    <div class="form-group" id="emailGroup" style="display:none">
+                        <label>Email <small>(optional)</small></label>
+                        <input type="email" id="regEmail" placeholder="Enter your email" style="width:100%">
+                    </div>
+                    <button class="btn btn-primary btn-block" id="authBtn" onclick="submitAuth()">Continue</button>
+                    <p style="margin-top:14px;font-size:14px">
+                        <span id="switchPrompt">New customer? <a href="#" onclick="toggleMode(event)"><strong>Create an account</strong></a></span>
+                    </p>
+                </div>
+            </div>
+            <div id="accountView" style="display:none">
+                <div class="account-header">
+                    <h2>My Account</h2>
+                    <button class="btn btn-outline" onclick="logout()">Logout</button>
+                </div>
+                <div class="account-tabs">
+                    <button class="tab-btn active" onclick="switchTab('orders')">My Orders</button>
+                    <button class="tab-btn" onclick="switchTab('details')">Account Details</button>
+                </div>
+                <div id="ordersTab" class="tab-content active">
+                    <div class="cart-loading"><i class="fas fa-spinner fa-spin"></i></div>
+                </div>
+                <div id="detailsTab" class="tab-content" style="display:none">
+                    <p id="accountDetails"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+async function checkLogin() {
+    const res = await fetch('/api/session');
+    const data = await res.json();
+    if (data.logged_in) {
+        document.getElementById('loginView').style.display = 'none';
+        document.getElementById('accountView').style.display = 'block';
+        document.getElementById('accountDetails').innerHTML =
+            `<strong>Name:</strong> ${data.name}<br><strong>Phone:</strong> ${data.phone}<br><strong>Email:</strong> ${data.email || 'Not provided'}`;
+        loadOrders();
+    }
+}
+
+let authMode = 'login'; // 'login' | 'register'
+
+function toggleMode(e) {
+    if (e) e.preventDefault();
+    authMode = authMode === 'login' ? 'register' : 'login';
+    const isReg = authMode === 'register';
+    document.getElementById('nameGroup').style.display = isReg ? 'block' : 'none';
+    document.getElementById('emailGroup').style.display = isReg ? 'block' : 'none';
+    document.getElementById('authTitle').textContent = isReg ? 'Create Account' : 'Welcome!';
+    document.getElementById('authSubtitle').textContent = isReg
+        ? 'Register to track your orders and manage your account'
+        : 'Login to track your orders and manage your account';
+    document.getElementById('authBtn').textContent = isReg ? 'Create Account' : 'Continue';
+    document.getElementById('switchPrompt').innerHTML = isReg
+        ? 'Already have an account? <a href="#" onclick="toggleMode(event)"><strong>Login</strong></a>'
+        : 'New customer? <a href="#" onclick="toggleMode(event)"><strong>Create an account</strong></a>';
+}
+
+async function submitAuth() {
+    const phone = document.getElementById('loginPhone').value.trim();
+    if (!phone) return showToast('Please enter your phone number', 'error');
+
+    if (authMode === 'register') {
+        const name = document.getElementById('regName').value.trim();
+        const email = document.getElementById('regEmail').value.trim();
+        if (!name) return showToast('Please enter your name', 'error');
+        if (!/^[0-9]{10}$/.test(phone)) return showToast('Enter a valid 10-digit phone number', 'error');
+        const res = await fetch('/api/register', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({phone, name, email})
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Account created. Welcome, ' + data.name + '!');
+            checkLogin();
+        } else {
+            showToast(data.error || 'Registration failed', 'error');
+        }
+        return;
+    }
+
+    const res = await fetch('/api/login-phone', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({phone})
+    });
+    const data = await res.json();
+    if (data.success) {
+        showToast('Welcome back, ' + data.name + '!');
+        checkLogin();
+    } else {
+        showToast(data.error || 'User not found. Please register first.', 'error');
+        if (res.status === 404) toggleMode(); // jump straight to register form
+    }
+}
+
+async function loadOrders() {
+    const res = await fetch('/api/orders');
+    if (res.status === 401) return;
+    const orders = await res.json();
+    const container = document.getElementById('ordersTab');
+    if (orders.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>No orders yet.</p><a href="/shop" class="btn btn-primary">Start Shopping</a></div>';
+        return;
+    }
+    container.innerHTML = orders.map(o => `
+        <div class="order-card">
+            <div class="order-header">
+                <span>${o.order_id}</span>
+                <span class="badge badge-${o.status}">${o.status}</span>
+            </div>
+            <div class="order-items">
+                ${o.items.map(i => `<span>${i.name} × ${i.quantity}</span>`).join(', ')}
+            </div>
+            <div class="order-footer">
+                <span>Total: ₹${o.total.toLocaleString('en-IN')}</span>
+                <span>${new Date(o.created_at).toLocaleDateString('en-IN')}</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+    event.target.classList.add('active');
+    document.getElementById(tab + 'Tab').style.display = 'block';
+}
+
+async function logout() {
+    await fetch('/api/logout', {method: 'POST'});
+    window.location.reload();
+}
+
+checkLogin();
+</script>
+{% endblock %}
